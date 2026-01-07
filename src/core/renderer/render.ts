@@ -12,6 +12,25 @@ export type RenderInput = {
   preset: Preset
 }
 
+// Background cache to avoid regenerating noise/grain on every render
+type BackgroundCacheEntry = {
+  imageData: ImageData
+  key: string
+}
+
+let backgroundCache: BackgroundCacheEntry | null = null
+
+function getBackgroundCacheKey(
+  w: number,
+  h: number,
+  presetId: string,
+  strength: number
+): string {
+  // Round strength to reduce cache misses during slider drag
+  const roundedStrength = Math.round(strength / 5) * 5
+  return `${w}:${h}:${presetId}:${roundedStrength}`
+}
+
 // Export sizes
 const SIZES: Record<CanvasRatio, { w: number; h: number }> = {
   '4:5': { w: 1080, h: 1350 },
@@ -40,7 +59,8 @@ function computeTone(preset: Preset, strength: number) {
 }
 
 function setCanvasDPR(canvas: HTMLCanvasElement, cssW: number, cssH: number) {
-  const dpr = Math.max(1, Math.floor(window.devicePixelRatio || 1))
+  // Cap DPR at 2 to avoid excessive memory/CPU usage on 3x devices
+  const dpr = Math.min(2, Math.max(1, Math.floor(window.devicePixelRatio || 1)))
   canvas.style.width = cssW + 'px'
   canvas.style.height = cssH + 'px'
   canvas.width = cssW * dpr
@@ -54,28 +74,44 @@ export function renderToCanvas(canvas: HTMLCanvasElement, input: RenderInput) {
   const size = SIZES[input.ratio]
   const { ctx } = setCanvasDPR(canvas, size.w, size.h)
 
-  // --- Background pipeline
-  drawPaperBase(ctx, size.w, size.h, input.preset.background.baseColor)
+  const cacheKey = getBackgroundCacheKey(size.w, size.h, input.preset.id, input.styleStrength)
+
+  // Check if we can use cached background
+  if (backgroundCache && backgroundCache.key === cacheKey) {
+    // Restore cached background
+    ctx.putImageData(backgroundCache.imageData, 0, 0)
+  } else {
+    // --- Background pipeline (expensive, so we cache it)
+    drawPaperBase(ctx, size.w, size.h, input.preset.background.baseColor)
+
+    const tone = computeTone(input.preset, input.styleStrength)
+
+    // paper micro-noise
+    if (input.preset.background.noise.enabled) {
+      const n = input.preset.background.noise
+      // density slightly modulated by strength
+      const density = Math.round(n.density * mix(0.9, 1.15, clamp01(input.styleStrength / 100)))
+      drawPaperNoise(ctx, size.w, size.h, n.alpha, density, n.dotSize)
+    }
+
+    // warmth overlay (subtle)
+    drawWarmthOverlay(ctx, size.w, size.h, tone.warmth)
+
+    // grain on top
+    drawGrain(ctx, size.w, size.h, tone.grain)
+
+    // Cache the background
+    backgroundCache = {
+      imageData: ctx.getImageData(0, 0, size.w, size.h),
+      key: cacheKey,
+    }
+  }
 
   const tone = computeTone(input.preset, input.styleStrength)
-
-  // paper micro-noise
-  if (input.preset.background.noise.enabled) {
-    const n = input.preset.background.noise
-    // density slightly modulated by strength
-    const density = Math.round(n.density * mix(0.9, 1.15, clamp01(input.styleStrength / 100)))
-    drawPaperNoise(ctx, size.w, size.h, n.alpha, density, n.dotSize)
-  }
 
   // CSS-like filters (stable & simple)
   ctx.save()
   ctx.filter = `contrast(${tone.contrast}) saturate(${tone.saturate}) brightness(${tone.brightness})`
-
-  // warmth overlay (subtle)
-  drawWarmthOverlay(ctx, size.w, size.h, tone.warmth)
-
-  // grain on top
-  drawGrain(ctx, size.w, size.h, tone.grain)
 
   // --- Typography pipeline
   const contentWidth = Math.round(size.w * 0.68)

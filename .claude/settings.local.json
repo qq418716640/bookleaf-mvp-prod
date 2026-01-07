@@ -13,7 +13,10 @@
       "Bash(networksetup:*)",
       "Bash(scutil:*)",
       "Bash(echo:*)",
-      "Bash(unset http_proxy https_proxy HTTP_PROXY HTTPS_PROXY)"
+      "Bash(unset http_proxy https_proxy HTTP_PROXY HTTPS_PROXY)",
+      "Bash(tree:*)",
+      "Bash(npm run build:*)",
+      "Bash(npx tsc:*)"
     ]
   }
 }

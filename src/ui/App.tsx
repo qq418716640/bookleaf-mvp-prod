@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react'
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { CanvasRatio, PresetId, TextAlign } from '../core/types'
 import { getPreset, PRESETS } from '../core/presets'
 import { exportCanvasPNG, renderToCanvas } from '../core/renderer/render'
@@ -50,19 +50,44 @@ export default function App() {
     return `— ${t}`
   }, [author])
 
-  useEffect(() => {
-    const c = canvasRef.current
-    if (!c) return
-    renderToCanvas(c, {
-      quote: normalizedQuote,
-      author: normalizedAuthor,
-      showAuthor,
-      align,
-      ratio,
-      styleStrength: strength,
-      preset,
+  // Throttled render using RAF to avoid excessive redraws
+  const rafIdRef = useRef<number | null>(null)
+  const renderPending = useRef(false)
+
+  const scheduleRender = useCallback(() => {
+    if (renderPending.current) return
+    renderPending.current = true
+
+    if (rafIdRef.current) {
+      cancelAnimationFrame(rafIdRef.current)
+    }
+
+    rafIdRef.current = requestAnimationFrame(() => {
+      const c = canvasRef.current
+      if (c) {
+        renderToCanvas(c, {
+          quote: normalizedQuote,
+          author: normalizedAuthor,
+          showAuthor,
+          align,
+          ratio,
+          styleStrength: strength,
+          preset,
+        })
+      }
+      renderPending.current = false
+      rafIdRef.current = null
     })
   }, [normalizedQuote, normalizedAuthor, showAuthor, align, ratio, strength, preset])
+
+  useEffect(() => {
+    scheduleRender()
+    return () => {
+      if (rafIdRef.current) {
+        cancelAnimationFrame(rafIdRef.current)
+      }
+    }
+  }, [scheduleRender])
 
   async function onExport() {
     // Ensure web fonts are loaded before export for consistent typography

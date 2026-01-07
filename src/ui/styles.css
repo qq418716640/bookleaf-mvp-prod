@@ -63,11 +63,10 @@ a{ color: inherit; }
 }
 
 .card{
-  background: linear-gradient(180deg, rgba(255,255,255,0.06), rgba(255,255,255,0.03));
+  background: linear-gradient(180deg, rgba(20,23,34,0.95), rgba(17,19,26,0.98));
   border: 1px solid var(--border);
   border-radius: 16px;
   padding: 14px;
-  backdrop-filter: blur(10px);
 }
 
 .card h2{
