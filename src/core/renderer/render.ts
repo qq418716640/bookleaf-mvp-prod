@@ -23,12 +23,13 @@ let backgroundCache: BackgroundCacheEntry | null = null
 function getBackgroundCacheKey(
   w: number,
   h: number,
+  dpr: number,
   presetId: string,
   strength: number
 ): string {
   // Round strength to reduce cache misses during slider drag
   const roundedStrength = Math.round(strength / 5) * 5
-  return `${w}:${h}:${presetId}:${roundedStrength}`
+  return `${w}:${h}:${dpr}:${presetId}:${roundedStrength}`
 }
 
 // Export sizes
@@ -72,19 +73,21 @@ function setCanvasDPR(canvas: HTMLCanvasElement, cssW: number, cssH: number) {
 
 export function renderToCanvas(canvas: HTMLCanvasElement, input: RenderInput) {
   const size = SIZES[input.ratio]
-  const { ctx } = setCanvasDPR(canvas, size.w, size.h)
+  const { ctx, dpr } = setCanvasDPR(canvas, size.w, size.h)
 
-  const cacheKey = getBackgroundCacheKey(size.w, size.h, input.preset.id, input.styleStrength)
+  const tone = computeTone(input.preset, input.styleStrength)
+  const cacheKey = getBackgroundCacheKey(size.w, size.h, dpr, input.preset.id, input.styleStrength)
 
   // Check if we can use cached background
   if (backgroundCache && backgroundCache.key === cacheKey) {
-    // Restore cached background
+    // Restore cached background - need to reset transform for putImageData
+    ctx.save()
+    ctx.setTransform(1, 0, 0, 1, 0, 0)
     ctx.putImageData(backgroundCache.imageData, 0, 0)
+    ctx.restore()
   } else {
     // --- Background pipeline (expensive, so we cache it)
     drawPaperBase(ctx, size.w, size.h, input.preset.background.baseColor)
-
-    const tone = computeTone(input.preset, input.styleStrength)
 
     // paper micro-noise
     if (input.preset.background.noise.enabled) {
@@ -100,18 +103,27 @@ export function renderToCanvas(canvas: HTMLCanvasElement, input: RenderInput) {
     // grain on top
     drawGrain(ctx, size.w, size.h, tone.grain)
 
-    // Cache the background
+    // Cache the background - need actual pixel dimensions
+    ctx.save()
+    ctx.setTransform(1, 0, 0, 1, 0, 0)
     backgroundCache = {
-      imageData: ctx.getImageData(0, 0, size.w, size.h),
+      imageData: ctx.getImageData(0, 0, size.w * dpr, size.h * dpr),
       key: cacheKey,
     }
+    ctx.restore()
   }
 
-  const tone = computeTone(input.preset, input.styleStrength)
-
-  // CSS-like filters (stable & simple)
+  // Apply CSS-like filters to entire canvas (including background)
+  // by drawing the current content onto itself with filters
   ctx.save()
+  ctx.setTransform(1, 0, 0, 1, 0, 0)
   ctx.filter = `contrast(${tone.contrast}) saturate(${tone.saturate}) brightness(${tone.brightness})`
+  ctx.drawImage(canvas, 0, 0)
+  ctx.restore()
+
+  // Reset transform and filter for text drawing
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0)
+  ctx.filter = 'none'
 
   // --- Typography pipeline
   const contentWidth = Math.round(size.w * 0.68)
@@ -198,8 +210,6 @@ export function renderToCanvas(canvas: HTMLCanvasElement, input: RenderInput) {
     ctx.font = authorFont
     ctx.fillText(input.author, x, y)
   }
-
-  ctx.restore()
 }
 
 export async function exportCanvasPNG(canvas: HTMLCanvasElement): Promise<Blob> {

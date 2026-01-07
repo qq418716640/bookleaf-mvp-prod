@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import React, { useEffect, useMemo, useRef, useState } from 'react'
 import type { CanvasRatio, PresetId, TextAlign } from '../core/types'
 import { getPreset, PRESETS } from '../core/presets'
 import { exportCanvasPNG, renderToCanvas } from '../core/renderer/render'
@@ -52,12 +52,30 @@ export default function App() {
 
   // Throttled render using RAF to avoid excessive redraws
   const rafIdRef = useRef<number | null>(null)
-  const renderPending = useRef(false)
 
-  const scheduleRender = useCallback(() => {
-    if (renderPending.current) return
-    renderPending.current = true
+  // Store latest render input in ref to avoid stale closure
+  const renderInputRef = useRef({
+    quote: normalizedQuote,
+    author: normalizedAuthor,
+    showAuthor,
+    align,
+    ratio,
+    styleStrength: strength,
+    preset,
+  })
 
+  // Update ref whenever dependencies change
+  renderInputRef.current = {
+    quote: normalizedQuote,
+    author: normalizedAuthor,
+    showAuthor,
+    align,
+    ratio,
+    styleStrength: strength,
+    preset,
+  }
+
+  useEffect(() => {
     if (rafIdRef.current) {
       cancelAnimationFrame(rafIdRef.current)
     }
@@ -65,29 +83,17 @@ export default function App() {
     rafIdRef.current = requestAnimationFrame(() => {
       const c = canvasRef.current
       if (c) {
-        renderToCanvas(c, {
-          quote: normalizedQuote,
-          author: normalizedAuthor,
-          showAuthor,
-          align,
-          ratio,
-          styleStrength: strength,
-          preset,
-        })
+        renderToCanvas(c, renderInputRef.current)
       }
-      renderPending.current = false
       rafIdRef.current = null
     })
-  }, [normalizedQuote, normalizedAuthor, showAuthor, align, ratio, strength, preset])
 
-  useEffect(() => {
-    scheduleRender()
     return () => {
       if (rafIdRef.current) {
         cancelAnimationFrame(rafIdRef.current)
       }
     }
-  }, [scheduleRender])
+  }, [normalizedQuote, normalizedAuthor, showAuthor, align, ratio, strength, preset])
 
   async function onExport() {
     // Ensure web fonts are loaded before export for consistent typography
