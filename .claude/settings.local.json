@@ -1,0 +1,19 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(cat:*)",
+      "Bash(npm config list:*)",
+      "Bash(ping:*)",
+      "Bash(npm config:*)",
+      "Bash(npm install:*)",
+      "Bash(curl:*)",
+      "Bash(npm cache clean:*)",
+      "Bash(rm:*)",
+      "Bash(nslookup:*)",
+      "Bash(networksetup:*)",
+      "Bash(scutil:*)",
+      "Bash(echo:*)",
+      "Bash(unset http_proxy https_proxy HTTP_PROXY HTTPS_PROXY)"
+    ]
+  }
+}
