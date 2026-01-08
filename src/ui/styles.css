@@ -54,7 +54,7 @@ a{ color: inherit; }
 
 .grid{
   display:grid;
-  grid-template-columns: 420px 1fr;
+  grid-template-columns: 360px 1fr;
   gap: 16px;
 }
 
@@ -185,10 +185,62 @@ input[type="range"]{
 }
 
 canvas{
-  width: min(540px, 100%);
+  width: min(800px, 100%);
   height: auto;
   border-radius: 12px;
   background: transparent;
+}
+
+/* Preset 选择器 - 带缩略图 */
+.preset-grid{
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+}
+
+.preset-card{
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 8px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: rgba(0,0,0,0.20);
+  cursor: pointer;
+  transition: border-color 0.15s ease, background 0.15s ease;
+}
+
+.preset-card:hover{
+  background: rgba(255,255,255,0.05);
+}
+
+.preset-card.active{
+  border-color: rgba(124,92,255,0.65);
+  background: rgba(124,92,255,0.15);
+}
+
+.preset-thumb{
+  width: 100%;
+  aspect-ratio: 4/5;
+  object-fit: cover;
+  border-radius: 8px;
+  background: rgba(0,0,0,0.3);
+}
+
+.preset-label{
+  font-size: 11px;
+  color: rgba(233,233,238,0.9);
+}
+
+/* Loading 状态 */
+.loading{
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 300px;
+  color: var(--muted);
+  font-size: 14px;
 }
 
 .footerNote{

@@ -1,0 +1,1 @@
+{"root":["./src/main.tsx","./src/core/presets.ts","./src/core/types.ts","./src/core/renderer/layout.ts","./src/core/renderer/render.ts","./src/core/utils/text.ts","./src/ui/app.tsx"],"version":"5.9.3"}

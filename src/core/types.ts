@@ -1,49 +1,27 @@
 export type CanvasRatio = '4:5' | '1:1'
-export type TextAlign = 'left' | 'center'
-export type PresetId = 'editorial' | 'classic' | 'modern' | 'newsprint'
+export type TextAlign = 'left' | 'center' | 'right'
+export type PresetId = 'editorial' | 'classic' | 'modern'
 
 export type Preset = {
   id: PresetId
   label: string
-  background: {
-    baseColor: string
-    noise: {
-      enabled: boolean
-      alpha: number // 0-1
-      density: number // points per megapixel-ish
-      dotSize: 1 | 2
-    }
-    vignette: {
-      enabled: boolean
-      strength: number // 0-1
-    }
-  }
+  // 图片资源路径
+  previewImage: string      // 风格选择器缩略图
+  backgroundImage: string   // 背景图
+  filterImage: string       // Multiply 滤镜叠加图
+  // 排版配置
   typography: {
     quoteFontFamily: string
     quoteFontWeight: number
+    quoteFontStyle: 'normal' | 'italic'
+    quoteSize: number       // 固定字号
+    quoteLineHeight: number // 如 1.7
+    quoteColor: string
     authorFontFamily: string
     authorFontWeight: number
-    quoteColor: string
+    authorFontStyle: 'normal' | 'italic'
+    authorSize: number
+    authorLineHeight: number
     authorColor: string
-    lineHeight: number
-    maxLineChars: number
-  }
-  tone: {
-    // Base values at strength=0
-    base: {
-      saturate: number // 1 = no change
-      contrast: number // 1 = no change
-      brightness: number // 1 = no change
-      warmth: number // -1..1 (applied as overlay)
-      grain: number // 0..1
-    }
-    // Delta applied when strength=100
-    delta: {
-      saturate: number
-      contrast: number
-      brightness: number
-      warmth: number
-      grain: number
-    }
   }
 }

@@ -1,7 +1,13 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react'
 import type { CanvasRatio, PresetId, TextAlign } from '../core/types'
 import { getPreset, PRESETS } from '../core/presets'
-import { exportCanvasPNG, renderToCanvas } from '../core/renderer/render'
+import {
+  exportCanvasPNG,
+  getExportFileName,
+  preloadPresetImages,
+  renderToCanvas,
+  renderToCanvasSync,
+} from '../core/renderer/render'
 import { formatAuthor, isLatinText, normalizeSpaces, toCurlyQuotes } from '../core/utils/text'
 
 function downloadBlob(blob: Blob, filename: string) {
@@ -27,55 +33,73 @@ export default function App() {
   const [showAuthor, setShowAuthor] = useState(true)
 
   const [presetId, setPresetId] = useState<PresetId>('editorial')
-  const [align, setAlign] = useState<TextAlign>('left')
+  const [quoteAlign, setQuoteAlign] = useState<TextAlign>('left')
+  const [authorAlign, setAuthorAlign] = useState<TextAlign>('right')
   const [ratio, setRatio] = useState<CanvasRatio>('4:5')
-  const [strength, setStrength] = useState<number>(55)
+  const [strength, setStrength] = useState<number>(50)
+
+  const [isLoading, setIsLoading] = useState(true)
+  const [imagesReady, setImagesReady] = useState(false)
 
   const preset = useMemo(() => getPreset(presetId), [presetId])
 
   const normalizedQuote = useMemo(() => {
     const t = normalizeSpaces(quote)
-    // MVP: If it's mostly Latin, enforce curly quotes
     if (isLatinText(t)) return toCurlyQuotes(t)
-    // otherwise keep as-is
     return t
   }, [quote])
 
   const normalizedAuthor = useMemo(() => {
     const t = normalizeSpaces(author)
     if (!t) return ''
-    // If Latin-ish, add em dash
     if (isLatinText(t)) return formatAuthor(t)
-    // For non-Latin, still keep dash behavior (acceptable MVP default)
     return `— ${t}`
   }, [author])
 
-  // Throttled render using RAF to avoid excessive redraws
+  // 预加载图片
+  useEffect(() => {
+    async function init() {
+      try {
+        await document.fonts.ready
+        await preloadPresetImages(PRESETS)
+        setImagesReady(true)
+        setIsLoading(false)
+      } catch (err) {
+        console.error('Failed to preload images:', err)
+        setIsLoading(false)
+      }
+    }
+    init()
+  }, [])
+
+  // 渲染 Canvas
   const rafIdRef = useRef<number | null>(null)
 
-  // Store latest render input in ref to avoid stale closure
   const renderInputRef = useRef({
     quote: normalizedQuote,
     author: normalizedAuthor,
     showAuthor,
-    align,
+    quoteAlign,
+    authorAlign,
     ratio,
     styleStrength: strength,
     preset,
   })
 
-  // Update ref whenever dependencies change
   renderInputRef.current = {
     quote: normalizedQuote,
     author: normalizedAuthor,
     showAuthor,
-    align,
+    quoteAlign,
+    authorAlign,
     ratio,
     styleStrength: strength,
     preset,
   }
 
   useEffect(() => {
+    if (!imagesReady) return
+
     if (rafIdRef.current) {
       cancelAnimationFrame(rafIdRef.current)
     }
@@ -83,7 +107,12 @@ export default function App() {
     rafIdRef.current = requestAnimationFrame(() => {
       const c = canvasRef.current
       if (c) {
-        renderToCanvas(c, renderInputRef.current)
+        // 优先使用同步渲染（图片已缓存）
+        const synced = renderToCanvasSync(c, renderInputRef.current)
+        if (!synced) {
+          // 降级到异步渲染
+          renderToCanvas(c, renderInputRef.current)
+        }
       }
       rafIdRef.current = null
     })
@@ -93,30 +122,29 @@ export default function App() {
         cancelAnimationFrame(rafIdRef.current)
       }
     }
-  }, [normalizedQuote, normalizedAuthor, showAuthor, align, ratio, strength, preset])
+  }, [normalizedQuote, normalizedAuthor, showAuthor, quoteAlign, authorAlign, ratio, strength, preset, imagesReady])
 
   async function onExport() {
-    // Ensure web fonts are loaded before export for consistent typography
-    // (best-effort; supported in modern browsers)
-    // @ts-ignore
     if (document.fonts && document.fonts.ready) {
-      // @ts-ignore
       await document.fonts.ready
     }
 
     if (!canvasRef.current) return
-    const blob = await exportCanvasPNG(canvasRef.current)
-    downloadBlob(blob, 'bookleaf.png')
+    const blob = await exportCanvasPNG(canvasRef.current, presetId, ratio)
+    const filename = getExportFileName(presetId, ratio)
+    downloadBlob(blob, filename)
   }
 
   return (
     <div className="container">
       <div className="header">
         <div className="brand">
-          <h1>Bookleaf MVP</h1>
-          <p>Turn a quote into a page from a book.</p>
+          <h1>Leaflet</h1>
+          <p>Make words feel published.</p>
         </div>
-        <button className="btn primary" onClick={onExport}>导出 PNG</button>
+        <button className="btn primary" onClick={onExport} disabled={isLoading}>
+          导出 PNG
+        </button>
       </div>
 
       <div className="grid">
@@ -155,18 +183,25 @@ export default function App() {
           </div>
 
           <h2 style={{ marginTop: 18 }}>风格</h2>
+
+          {/* 风格选择器 - 带缩略图 */}
           <div className="field">
             <label>Preset</label>
-            <div className="pills">
+            <div className="preset-grid">
               {PRESETS.map((p) => (
                 <div
                   key={p.id}
-                  className={'pill' + (p.id === presetId ? ' active' : '')}
+                  className={'preset-card' + (p.id === presetId ? ' active' : '')}
                   onClick={() => setPresetId(p.id)}
                   role="button"
                   tabIndex={0}
                 >
-                  {p.label}
+                  <img
+                    src={p.previewImage}
+                    alt={p.label}
+                    className="preset-thumb"
+                  />
+                  <span className="preset-label">{p.label}</span>
                 </div>
               ))}
             </div>
@@ -184,23 +219,40 @@ export default function App() {
               value={strength}
               onChange={(e) => setStrength(Number(e.target.value))}
             />
-            <div className="small">映射：饱和度 / 对比度 / 亮度 / 暖色调 / 颗粒。</div>
+            <div className="small">控制滤镜叠加层的不透明度。</div>
           </div>
 
           <h2 style={{ marginTop: 18 }}>排版与尺寸</h2>
 
           <div className="field">
-            <label>对齐</label>
+            <label>Quote 对齐</label>
             <div className="pills">
               {(['left', 'center'] as TextAlign[]).map((a) => (
                 <div
                   key={a}
-                  className={'pill' + (a === align ? ' active' : '')}
-                  onClick={() => setAlign(a)}
+                  className={'pill' + (a === quoteAlign ? ' active' : '')}
+                  onClick={() => setQuoteAlign(a)}
                   role="button"
                   tabIndex={0}
                 >
                   {a === 'left' ? '左对齐' : '居中'}
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <div className="field">
+            <label>Author 对齐</label>
+            <div className="pills">
+              {(['right', 'center'] as TextAlign[]).map((a) => (
+                <div
+                  key={a}
+                  className={'pill' + (a === authorAlign ? ' active' : '')}
+                  onClick={() => setAuthorAlign(a)}
+                  role="button"
+                  tabIndex={0}
+                >
+                  {a === 'right' ? '右对齐' : '居中'}
                 </div>
               ))}
             </div>
@@ -217,24 +269,28 @@ export default function App() {
                   role="button"
                   tabIndex={0}
                 >
-                  {r === '4:5' ? '1080×1350 (4:5)' : '1080×1080 (1:1)'}
+                  {r}
                 </div>
               ))}
             </div>
           </div>
 
           <div className="footerNote">
-            MVP 说明：不做贴纸/图标、不做自由拖拽、不做多区块；所有可变性收敛到 Preset。
+            Leaflet - Make words feel published.
           </div>
         </div>
 
         <div className="card canvasWrap">
           <h2>预览</h2>
           <div className="canvasStage">
-            <canvas ref={canvasRef} />
+            {isLoading ? (
+              <div className="loading">加载中...</div>
+            ) : (
+              <canvas ref={canvasRef} />
+            )}
           </div>
           <div className="small">
-            预览为实时 Canvas 渲染；导出 PNG 为 sRGB（浏览器默认），无可见水印。
+            预览为实时 Canvas 渲染；导出 PNG 为 sRGB，无水印。
           </div>
         </div>
       </div>

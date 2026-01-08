@@ -4,95 +4,67 @@ export const PRESETS: Preset[] = [
   {
     id: 'editorial',
     label: 'Editorial',
-    background: {
-      baseColor: '#F5F3EE',
-      noise: { enabled: true, alpha: 0.035, density: 5200, dotSize: 1 },
-      vignette: { enabled: false, strength: 0 }
-    },
+    previewImage: '/presets/editorial/preview.png',
+    backgroundImage: '/presets/editorial/bg.png',
+    filterImage: '/presets/editorial/filter.png',
     typography: {
-      quoteFontFamily: '"Libre Baskerville", serif',
-      quoteFontWeight: 400,
-      authorFontFamily: '"Libre Baskerville", serif',
-      authorFontWeight: 400,
-      quoteColor: '#1F1F1F',
-      authorColor: '#666666',
-      lineHeight: 1.45,
-      maxLineChars: 62
+      quoteFontFamily: '"Crimson Text", serif',
+      quoteFontWeight: 600,
+      quoteFontStyle: 'normal',
+      quoteSize: 56,
+      quoteLineHeight: 1.7,
+      quoteColor: '#333333',
+      authorFontFamily: '"Crimson Text", serif',
+      authorFontWeight: 600,
+      authorFontStyle: 'italic',
+      authorSize: 48,
+      authorLineHeight: 1.7,
+      authorColor: '#333333',
     },
-    tone: {
-      base: { saturate: 0.94, contrast: 0.97, brightness: 1.00, warmth: 0.06, grain: 0.10 },
-      delta: { saturate: -0.06, contrast: -0.05, brightness: -0.02, warmth: 0.08, grain: 0.10 }
-    }
   },
   {
     id: 'classic',
     label: 'Classic',
-    background: {
-      baseColor: '#F2EEE6',
-      noise: { enabled: true, alpha: 0.04, density: 6200, dotSize: 1 },
-      vignette: { enabled: false, strength: 0 }
-    },
+    previewImage: '/presets/classic/preview.png',
+    backgroundImage: '/presets/classic/bg.png',
+    filterImage: '/presets/classic/filter.png',
     typography: {
-      quoteFontFamily: '"Libre Baskerville", serif',
-      quoteFontWeight: 400,
-      authorFontFamily: '"Libre Baskerville", serif',
-      authorFontWeight: 400,
-      quoteColor: '#1E1E1E',
-      authorColor: '#6A6A6A',
-      lineHeight: 1.48,
-      maxLineChars: 60
+      quoteFontFamily: '"Averia Serif Libre", serif',
+      quoteFontWeight: 700,
+      quoteFontStyle: 'normal',
+      quoteSize: 56,
+      quoteLineHeight: 1.7,
+      quoteColor: '#333333',
+      authorFontFamily: '"Averia Serif Libre", serif',
+      authorFontWeight: 700,
+      authorFontStyle: 'italic',
+      authorSize: 48,
+      authorLineHeight: 1.7,
+      authorColor: '#333333',
     },
-    tone: {
-      base: { saturate: 0.95, contrast: 0.98, brightness: 1.00, warmth: 0.08, grain: 0.12 },
-      delta: { saturate: -0.06, contrast: -0.06, brightness: -0.02, warmth: 0.10, grain: 0.12 }
-    }
   },
   {
     id: 'modern',
     label: 'Modern',
-    background: {
-      baseColor: '#F6F6F4',
-      noise: { enabled: false, alpha: 0.0, density: 0, dotSize: 1 },
-      vignette: { enabled: false, strength: 0 }
-    },
+    previewImage: '/presets/modern/preview.png',
+    backgroundImage: '/presets/modern/bg.png',
+    filterImage: '/presets/modern/filter.png',
     typography: {
-      quoteFontFamily: 'Inter, system-ui, sans-serif',
-      quoteFontWeight: 500,
-      authorFontFamily: 'Inter, system-ui, sans-serif',
-      authorFontWeight: 400,
-      quoteColor: '#1A1A1A',
-      authorColor: '#6B6B6B',
-      lineHeight: 1.52,
-      maxLineChars: 56
-    },
-    tone: {
-      base: { saturate: 1.00, contrast: 1.00, brightness: 1.00, warmth: 0.00, grain: 0.00 },
-      delta: { saturate: -0.02, contrast: -0.02, brightness: 0.00, warmth: 0.02, grain: 0.00 }
-    }
-  },
-  {
-    id: 'newsprint',
-    label: 'Newsprint',
-    background: {
-      baseColor: '#ECEAE3',
-      noise: { enabled: true, alpha: 0.06, density: 9200, dotSize: 2 },
-      vignette: { enabled: false, strength: 0 }
-    },
-    typography: {
-      quoteFontFamily: '"Source Serif 4", serif',
+      // 使用 EB Garamond 作为 New Athena Unicode 的替代
+      quoteFontFamily: '"EB Garamond", serif',
       quoteFontWeight: 400,
-      authorFontFamily: '"Source Sans 3", sans-serif',
+      quoteFontStyle: 'normal',
+      quoteSize: 52,
+      quoteLineHeight: 1.6,
+      quoteColor: '#333333',
+      authorFontFamily: '"EB Garamond", serif',
       authorFontWeight: 400,
-      quoteColor: '#1B1B1B',
-      authorColor: '#585858',
-      lineHeight: 1.44,
-      maxLineChars: 66
+      authorFontStyle: 'normal',
+      authorSize: 40,
+      authorLineHeight: 1.6,
+      authorColor: '#333333',
     },
-    tone: {
-      base: { saturate: 0.85, contrast: 1.02, brightness: 1.00, warmth: 0.04, grain: 0.20 },
-      delta: { saturate: -0.10, contrast: 0.02, brightness: -0.02, warmth: 0.06, grain: 0.18 }
-    }
-  }
+  },
 ]
 
 export function getPreset(id: Preset['id']): Preset {

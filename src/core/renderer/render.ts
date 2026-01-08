@@ -1,66 +1,79 @@
 import type { CanvasRatio, Preset, TextAlign } from '../types'
-import { drawGrain, drawPaperBase, drawPaperNoise, drawWarmthOverlay } from './paper'
-import { measureMaxLineWidthByChars, wrapTextByWidth } from './layout'
+import { wrapTextByWidth } from './layout'
 
 export type RenderInput = {
   quote: string
   author?: string
   showAuthor: boolean
-  align: TextAlign
+  quoteAlign: TextAlign
+  authorAlign: TextAlign
   ratio: CanvasRatio
-  styleStrength: number // 0..100
+  styleStrength: number // 0..100, 控制 filter 图层 opacity
   preset: Preset
 }
 
-// Background cache to avoid regenerating noise/grain on every render
-type BackgroundCacheEntry = {
-  imageData: ImageData
-  key: string
-}
-
-let backgroundCache: BackgroundCacheEntry | null = null
-
-function getBackgroundCacheKey(
-  w: number,
-  h: number,
-  dpr: number,
-  presetId: string,
-  strength: number
-): string {
-  // Round strength to reduce cache misses during slider drag
-  const roundedStrength = Math.round(strength / 5) * 5
-  return `${w}:${h}:${dpr}:${presetId}:${roundedStrength}`
-}
-
-// Export sizes
+// 导出尺寸
 const SIZES: Record<CanvasRatio, { w: number; h: number }> = {
   '4:5': { w: 1080, h: 1350 },
   '1:1': { w: 1080, h: 1080 },
 }
 
-function clamp01(x: number) {
-  return Math.max(0, Math.min(1, x))
-}
+// 图片缓存
+const imageCache = new Map<string, HTMLImageElement>()
 
-function mix(a: number, b: number, t: number) {
-  return a + (b - a) * t
-}
-
-function computeTone(preset: Preset, strength: number) {
-  const t = clamp01(strength / 100)
-  const base = preset.tone.base
-  const d = preset.tone.delta
-  return {
-    saturate: base.saturate + d.saturate * t,
-    contrast: base.contrast + d.contrast * t,
-    brightness: base.brightness + d.brightness * t,
-    warmth: base.warmth + d.warmth * t,
-    grain: base.grain + d.grain * t,
+/**
+ * 加载图片并缓存
+ */
+async function loadImage(src: string): Promise<HTMLImageElement> {
+  if (imageCache.has(src)) {
+    return imageCache.get(src)!
   }
+
+  return new Promise((resolve, reject) => {
+    const img = new Image()
+    img.onload = () => {
+      imageCache.set(src, img)
+      resolve(img)
+    }
+    img.onerror = () => reject(new Error(`Failed to load image: ${src}`))
+    img.src = src
+  })
 }
 
+/**
+ * 预加载所有预设图片
+ */
+export async function preloadPresetImages(presets: Preset[]): Promise<void> {
+  const promises: Promise<HTMLImageElement>[] = []
+  for (const preset of presets) {
+    promises.push(loadImage(preset.backgroundImage))
+    promises.push(loadImage(preset.filterImage))
+    promises.push(loadImage(preset.previewImage))
+  }
+  await Promise.all(promises)
+}
+
+/**
+ * Cover 模式绘制图片（等比缩放铺满，居中裁切）
+ */
+function drawImageCover(
+  ctx: CanvasRenderingContext2D,
+  img: HTMLImageElement,
+  canvasW: number,
+  canvasH: number
+): void {
+  const scale = Math.max(canvasW / img.width, canvasH / img.height)
+  const w = img.width * scale
+  const h = img.height * scale
+  const x = (canvasW - w) / 2
+  const y = (canvasH - h) / 2
+  ctx.drawImage(img, x, y, w, h)
+}
+
+/**
+ * 设置 Canvas DPR
+ */
 function setCanvasDPR(canvas: HTMLCanvasElement, cssW: number, cssH: number) {
-  // Cap DPR at 2 to avoid excessive memory/CPU usage on 3x devices
   const dpr = Math.min(2, Math.max(1, Math.floor(window.devicePixelRatio || 1)))
   canvas.style.width = cssW + 'px'
   canvas.style.height = cssH + 'px'
@@ -71,152 +84,166 @@ function setCanvasDPR(canvas: HTMLCanvasElement, cssW: number, cssH: number) {
   return { ctx, dpr }
 }
 
-export function renderToCanvas(canvas: HTMLCanvasElement, input: RenderInput) {
+/**
+ * 主渲染函数
+ */
+export async function renderToCanvas(
+  canvas: HTMLCanvasElement,
+  input: RenderInput
+): Promise<void> {
   const size = SIZES[input.ratio]
-  const { ctx, dpr } = setCanvasDPR(canvas, size.w, size.h)
+  const { ctx } = setCanvasDPR(canvas, size.w, size.h)
 
-  const tone = computeTone(input.preset, input.styleStrength)
-  const cacheKey = getBackgroundCacheKey(size.w, size.h, dpr, input.preset.id, input.styleStrength)
+  // 1. 加载图片
+  const [bgImage, filterImage] = await Promise.all([
+    loadImage(input.preset.backgroundImage),
+    loadImage(input.preset.filterImage),
+  ])
 
-  // Check if we can use cached background
-  if (backgroundCache && backgroundCache.key === cacheKey) {
-    // Restore cached background - need to reset transform for putImageData
-    ctx.save()
-    ctx.setTransform(1, 0, 0, 1, 0, 0)
-    ctx.putImageData(backgroundCache.imageData, 0, 0)
-    ctx.restore()
-  } else {
-    // --- Background pipeline (expensive, so we cache it)
-    drawPaperBase(ctx, size.w, size.h, input.preset.background.baseColor)
+  // 2. 绘制背景图（cover 填充）
+  drawImageCover(ctx, bgImage, size.w, size.h)
 
-    // paper micro-noise
-    if (input.preset.background.noise.enabled) {
-      const n = input.preset.background.noise
-      // density slightly modulated by strength
-      const density = Math.round(n.density * mix(0.9, 1.15, clamp01(input.styleStrength / 100)))
-      drawPaperNoise(ctx, size.w, size.h, n.alpha, density, n.dotSize)
-    }
-
-    // warmth overlay (subtle)
-    drawWarmthOverlay(ctx, size.w, size.h, tone.warmth)
-
-    // grain on top
-    drawGrain(ctx, size.w, size.h, tone.grain)
-
-    // Cache the background - need actual pixel dimensions
-    ctx.save()
-    ctx.setTransform(1, 0, 0, 1, 0, 0)
-    backgroundCache = {
-      imageData: ctx.getImageData(0, 0, size.w * dpr, size.h * dpr),
-      key: cacheKey,
-    }
-    ctx.restore()
-  }
-
-  // Apply CSS-like filters to entire canvas (including background)
-  // by drawing the current content onto itself with filters
+  // 3. 绘制滤镜叠加图（Multiply 模式 + opacity）
   ctx.save()
-  ctx.setTransform(1, 0, 0, 1, 0, 0)
-  ctx.filter = `contrast(${tone.contrast}) saturate(${tone.saturate}) brightness(${tone.brightness})`
-  ctx.drawImage(canvas, 0, 0)
+  ctx.globalCompositeOperation = 'multiply'
+  ctx.globalAlpha = input.styleStrength / 100
+  drawImageCover(ctx, filterImage, size.w, size.h)
   ctx.restore()
 
-  // Reset transform and filter for text drawing
-  ctx.setTransform(dpr, 0, 0, dpr, 0, 0)
-  ctx.filter = 'none'
+  // 4. 绘制文本层
+  drawTextLayer(ctx, size.w, size.h, input)
+}
 
-  // --- Typography pipeline
-  const contentWidth = Math.round(size.w * 0.68)
-  const leftX = Math.round((size.w - contentWidth) / 2)
+/**
+ * 同步渲染（用于已缓存图片的快速重绘）
+ */
+export function renderToCanvasSync(
+  canvas: HTMLCanvasElement,
+  input: RenderInput
+): boolean {
+  const bgImage = imageCache.get(input.preset.backgroundImage)
+  const filterImage = imageCache.get(input.preset.filterImage)
 
-  // Dynamic font sizing based on canvas and quote length (simple + robust)
-  const minSize = input.ratio === '1:1' ? 42 : 44
-  const maxSize = input.ratio === '1:1' ? 56 : 58
-  const len = input.quote.length
-  // Longer text -> slightly smaller
-  const quoteSize = Math.round(
-    Math.max(minSize, Math.min(maxSize, maxSize - (len / 220) * 10))
-  )
+  if (!bgImage || !filterImage) {
+    return false // 图片未缓存，需要异步加载
+  }
 
-  const align: 'left' | 'center' = input.align
+  const size = SIZES[input.ratio]
+  const { ctx } = setCanvasDPR(canvas, size.w, size.h)
 
-  // Quote
-  ctx.fillStyle = input.preset.typography.quoteColor
+  // 绘制背景图
+  drawImageCover(ctx, bgImage, size.w, size.h)
+
+  // 绘制滤镜叠加图
+  ctx.save()
+  ctx.globalCompositeOperation = 'multiply'
+  ctx.globalAlpha = input.styleStrength / 100
+  drawImageCover(ctx, filterImage, size.w, size.h)
+  ctx.restore()
+
+  // 绘制文本层
+  drawTextLayer(ctx, size.w, size.h, input)
+
+  return true
+}
+
+/**
+ * 绘制文本层
+ */
+function drawTextLayer(
+  ctx: CanvasRenderingContext2D,
+  canvasW: number,
+  canvasH: number,
+  input: RenderInput
+): void {
+  const typo = input.preset.typography
+
+  // 文本区域宽度：画布宽度的 75%
+  const contentWidth = Math.round(canvasW * 0.75)
+  const leftX = Math.round((canvasW - contentWidth) / 2)
+  const centerX = Math.round(canvasW / 2)
+  const rightX = leftX + contentWidth
+
+  // Quote 字体设置
+  const quoteFont = `${typo.quoteFontStyle === 'italic' ? 'italic ' : ''}${typo.quoteFontWeight} ${typo.quoteSize}px ${typo.quoteFontFamily}`
+  ctx.font = quoteFont
+  ctx.fillStyle = typo.quoteColor
   ctx.textBaseline = 'alphabetic'
-  ctx.font = `${input.preset.typography.quoteFontWeight} ${quoteSize}px ${input.preset.typography.quoteFontFamily}`
 
-  // Estimate max width by chars, but cap to content width
-  const charWidthLimit = measureMaxLineWidthByChars(ctx, input.preset.typography.maxLineChars)
-  const maxWidth = Math.min(contentWidth, charWidthLimit)
+  // 文本换行
+  const lines = wrapTextByWidth(ctx, input.quote, contentWidth)
+  const lineHeightPx = typo.quoteSize * typo.quoteLineHeight
 
-  const lines = wrapTextByWidth(ctx, input.quote, maxWidth)
-  const lineHeightPx = quoteSize * input.preset.typography.lineHeight
+  // Author 设置
+  const authorFont = `${typo.authorFontStyle === 'italic' ? 'italic ' : ''}${typo.authorFontWeight} ${typo.authorSize}px ${typo.authorFontFamily}`
+  const authorLineHeightPx = typo.authorSize * typo.authorLineHeight
 
-  // Vertical layout: center-ish with top/bottom safety margins
-  const topPadding = Math.round(size.h * 0.16)
-  const bottomPadding = Math.round(size.h * 0.14)
-  const maxTextHeight = size.h - topPadding - bottomPadding
+  // 间距：1 行（使用 Quote 的行高）
+  const authorGap = lineHeightPx
 
-  const authorGap = Math.round(lineHeightPx * 1.5)
-  const authorSize = Math.round(quoteSize * 0.85)
-  const authorLineHeight = authorSize * 1.25
-
+  // 计算总高度
   const quoteBlockHeight = lines.length * lineHeightPx
-  const authorBlockHeight = input.showAuthor && input.author ? (authorLineHeight) : 0
+  const authorBlockHeight = input.showAuthor && input.author ? authorLineHeightPx : 0
   const totalHeight = quoteBlockHeight + (authorBlockHeight ? authorGap + authorBlockHeight : 0)
 
-  // If overflow, reduce font size in a small loop (deterministic)
-  let qs = quoteSize
-  let finalLines = lines
-  let finalLineHeight = lineHeightPx
-  let finalTotalHeight = totalHeight
+  // 垂直居中
+  const startY = Math.round((canvasH - totalHeight) / 2) + lineHeightPx * 0.8
 
-  for (let i = 0; i < 6 && finalTotalHeight > maxTextHeight; i++) {
-    qs = Math.max(34, Math.round(qs * 0.92))
-    ctx.font = `${input.preset.typography.quoteFontWeight} ${qs}px ${input.preset.typography.quoteFontFamily}`
-    const newMaxWidth = Math.min(contentWidth, measureMaxLineWidthByChars(ctx, input.preset.typography.maxLineChars))
-    finalLines = wrapTextByWidth(ctx, input.quote, newMaxWidth)
-    finalLineHeight = qs * input.preset.typography.lineHeight
+  // 绘制 Quote
+  ctx.font = quoteFont
+  ctx.fillStyle = typo.quoteColor
 
-    const newAuthorSize = Math.round(qs * 0.85)
-    const newAuthorLH = newAuthorSize * 1.25
-    const qh = finalLines.length * finalLineHeight
-    const ah = input.showAuthor && input.author ? newAuthorLH : 0
-    finalTotalHeight = qh + (ah ? Math.round(finalLineHeight * 1.5) + ah : 0)
-  }
-
-  const startY = Math.round(topPadding + (maxTextHeight - finalTotalHeight) * 0.38)
-
-  // Draw quote lines
   let y = startY
-  for (const line of finalLines) {
-    const x = align === 'left' ? leftX : Math.round(size.w / 2)
-    ctx.textAlign = align
-    ctx.fillStyle = input.preset.typography.quoteColor
-    ctx.font = `${input.preset.typography.quoteFontWeight} ${qs}px ${input.preset.typography.quoteFontFamily}`
-    ctx.fillText(line, x, y)
-    y += finalLineHeight
+  for (const line of lines) {
+    if (input.quoteAlign === 'left') {
+      ctx.textAlign = 'left'
+      ctx.fillText(line, leftX, y)
+    } else {
+      ctx.textAlign = 'center'
+      ctx.fillText(line, centerX, y)
+    }
+    y += lineHeightPx
   }
 
-  // Draw author
+  // 绘制 Author
   if (input.showAuthor && input.author) {
-    y += Math.round(finalLineHeight * 1.5)
-    const x = align === 'left' ? leftX : Math.round(size.w / 2)
-    ctx.textAlign = align
-    ctx.fillStyle = input.preset.typography.authorColor
-    const authorFont = input.preset.id === 'newsprint'
-      ? `${input.preset.typography.authorFontWeight} ${Math.round(qs * 0.78)}px ${input.preset.typography.authorFontFamily}`
-      : `${input.preset.typography.authorFontWeight} italic ${Math.round(qs * 0.82)}px ${input.preset.typography.authorFontFamily}`
+    y += authorGap
     ctx.font = authorFont
-    ctx.fillText(input.author, x, y)
+    ctx.fillStyle = typo.authorColor
+
+    if (input.authorAlign === 'left') {
+      ctx.textAlign = 'left'
+      ctx.fillText(input.author, leftX, y)
+    } else if (input.authorAlign === 'center') {
+      ctx.textAlign = 'center'
+      ctx.fillText(input.author, centerX, y)
+    } else {
+      // right 对齐（默认）
+      ctx.textAlign = 'right'
+      ctx.fillText(input.author, rightX, y)
+    }
   }
 }
 
-export async function exportCanvasPNG(canvas: HTMLCanvasElement): Promise<Blob> {
+/**
+ * 导出 PNG
+ */
+export async function exportCanvasPNG(
+  canvas: HTMLCanvasElement,
+  presetId: string,
+  ratio: CanvasRatio
+): Promise<Blob> {
   return await new Promise((resolve, reject) => {
     canvas.toBlob((b) => {
       if (!b) return reject(new Error('Failed to export canvas'))
       resolve(b)
     }, 'image/png')
   })
+}
+
+/**
+ * 生成导出文件名
+ */
+export function getExportFileName(presetId: string, ratio: CanvasRatio): string {
+  return `Leaflet_${presetId}_${ratio.replace(':', 'x')}.png`
 }
