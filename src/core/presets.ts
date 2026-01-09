@@ -4,9 +4,10 @@ export const PRESETS: Preset[] = [
   {
     id: 'editorial',
     label: 'Editorial',
-    previewImage: '/presets/editorial/preview.png',
-    backgroundImage: '/presets/editorial/bg.png',
-    filterImage: '/presets/editorial/filter.png',
+    previewImage: '/Leaflet/预览图/Editorial-1350.jpg',
+    backgroundImage: '/Leaflet/底纹/Editorial-bg-1350.jpg',
+    filterImage: '/Leaflet/滤镜/Editorial-filter-Multiply-1350.jpg',
+    defaultStrength: 50,
     typography: {
       quoteFontFamily: '"Crimson Text", serif',
       quoteFontWeight: 600,
@@ -25,9 +26,10 @@ export const PRESETS: Preset[] = [
   {
     id: 'classic',
     label: 'Classic',
-    previewImage: '/presets/classic/preview.png',
-    backgroundImage: '/presets/classic/bg.png',
-    filterImage: '/presets/classic/filter.png',
+    previewImage: '/Leaflet/预览图/Classic-1350.jpg',
+    backgroundImage: '/Leaflet/底纹/Classic-bg-1350.jpg',
+    filterImage: '/Leaflet/滤镜/Classic-filter-Multiply-1350.jpg',
+    defaultStrength: 50,
     typography: {
       quoteFontFamily: '"Averia Serif Libre", serif',
       quoteFontWeight: 700,
@@ -46,9 +48,10 @@ export const PRESETS: Preset[] = [
   {
     id: 'modern',
     label: 'Modern',
-    previewImage: '/presets/modern/preview.png',
-    backgroundImage: '/presets/modern/bg.png',
-    filterImage: '/presets/modern/filter.png',
+    previewImage: '/Leaflet/预览图/Modern-1350.jpg',
+    backgroundImage: '/Leaflet/底纹/Modern-bg-1350.jpg',
+    filterImage: '/Leaflet/滤镜/Modern-filter-Multiply-1350.jpg',
+    defaultStrength: 50,
     typography: {
       // 使用 EB Garamond 作为 New Athena Unicode 的替代
       quoteFontFamily: '"EB Garamond", serif',

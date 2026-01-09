@@ -9,6 +9,8 @@ export type Preset = {
   previewImage: string      // 风格选择器缩略图
   backgroundImage: string   // 背景图
   filterImage: string       // Multiply 滤镜叠加图
+  // 风格强度默认值
+  defaultStrength: number   // 0-100
   // 排版配置
   typography: {
     quoteFontFamily: string

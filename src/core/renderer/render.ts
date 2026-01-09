@@ -226,9 +226,9 @@ function drawTextLayer(
 }
 
 /**
- * 导出 PNG
+ * 导出 JPG
  */
-export async function exportCanvasPNG(
+export async function exportCanvasJPG(
   canvas: HTMLCanvasElement,
   presetId: string,
   ratio: CanvasRatio
@@ -237,7 +237,7 @@ export async function exportCanvasPNG(
     canvas.toBlob((b) => {
       if (!b) return reject(new Error('Failed to export canvas'))
       resolve(b)
-    }, 'image/png')
+    }, 'image/jpeg', 0.92)
   })
 }
 
@@ -245,5 +245,5 @@ export async function exportCanvasPNG(
  * 生成导出文件名
  */
 export function getExportFileName(presetId: string, ratio: CanvasRatio): string {
-  return `Leaflet_${presetId}_${ratio.replace(':', 'x')}.png`
+  return `Leaflet_${presetId}_${ratio.replace(':', 'x')}.jpg`
 }

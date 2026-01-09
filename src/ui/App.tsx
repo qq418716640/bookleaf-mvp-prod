@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from 'react'
 import type { CanvasRatio, PresetId, TextAlign } from '../core/types'
 import { getPreset, PRESETS } from '../core/presets'
 import {
-  exportCanvasPNG,
+  exportCanvasJPG,
   getExportFileName,
   preloadPresetImages,
   renderToCanvas,
@@ -36,7 +36,13 @@ export default function App() {
   const [quoteAlign, setQuoteAlign] = useState<TextAlign>('left')
   const [authorAlign, setAuthorAlign] = useState<TextAlign>('right')
   const [ratio, setRatio] = useState<CanvasRatio>('4:5')
-  const [strength, setStrength] = useState<number>(50)
+  const [strength, setStrength] = useState<number>(getPreset('editorial').defaultStrength)
+
+  // 切换预设时同步更新风格强度
+  function handlePresetChange(id: PresetId) {
+    setPresetId(id)
+    setStrength(getPreset(id).defaultStrength)
+  }
 
   const [isLoading, setIsLoading] = useState(true)
   const [imagesReady, setImagesReady] = useState(false)
@@ -130,7 +136,7 @@ export default function App() {
     }
 
     if (!canvasRef.current) return
-    const blob = await exportCanvasPNG(canvasRef.current, presetId, ratio)
+    const blob = await exportCanvasJPG(canvasRef.current, presetId, ratio)
     const filename = getExportFileName(presetId, ratio)
     downloadBlob(blob, filename)
   }
@@ -143,7 +149,7 @@ export default function App() {
           <p>Make words feel published.</p>
         </div>
         <button className="btn primary" onClick={onExport} disabled={isLoading}>
-          导出 PNG
+          导出 JPG
         </button>
       </div>
 
@@ -155,7 +161,8 @@ export default function App() {
             <label>Quote（主文本）</label>
             <textarea
               value={quote}
-              onChange={(e) => setQuote(e.target.value)}
+              onChange={(e) => setQuote(e.target.value.slice(0, 400))}
+              maxLength={400}
               placeholder="输入一句话…"
             />
             <div className="small">自动规则：西文将使用弯引号，作者前添加 em dash。</div>
@@ -176,7 +183,8 @@ export default function App() {
             <input
               type="text"
               value={author}
-              onChange={(e) => setAuthor(e.target.value)}
+              onChange={(e) => setAuthor(e.target.value.slice(0, 50))}
+              maxLength={50}
               placeholder="可选"
               disabled={!showAuthor}
             />
@@ -192,7 +200,7 @@ export default function App() {
                 <div
                   key={p.id}
                   className={'preset-card' + (p.id === presetId ? ' active' : '')}
-                  onClick={() => setPresetId(p.id)}
+                  onClick={() => handlePresetChange(p.id)}
                   role="button"
                   tabIndex={0}
                 >
@@ -290,7 +298,7 @@ export default function App() {
             )}
           </div>
           <div className="small">
-            预览为实时 Canvas 渲染；导出 PNG 为 sRGB，无水印。
+            预览为实时 Canvas 渲染；导出 JPG 为 sRGB，无水印。
           </div>
         </div>
       </div>
